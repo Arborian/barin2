@@ -1,0 +1,38 @@
+version: '3'
+
+volumes:
+    env:
+    db:
+
+services:
+    mongo:
+        image: mongo
+        volumes:
+            - db:/data/db
+
+    nb:
+        image: 240905845579.dkr.ecr.us-east-1.amazonaws.com/arborian-base
+        depends_on:
+          - mongo
+        env_file: 
+          - env.common
+        entrypoint: /sbin/tini -- 
+        command: /env/bin/jupyter notebook --ip=0.0.0.0 --port=8897 --allow-root
+        ports:
+            - '8897:8897'
+        volumes:
+            - 'env:/env'
+            - '~/src/wheelhouse:/wheelhouse:delegated'
+            - '~/src:/src:cached'
+            - '.:/app:cached'
+
+    builder:
+        image: 240905845579.dkr.ecr.us-east-1.amazonaws.com/arborian-builder
+        volumes:
+            - 'env:/env'
+            - '~/src/wheelhouse:/wheelhouse:delegated'
+            - '~/src:/src:cached'
+            - '.:/app:cached'
+        command: /bin/true
+        env_file: 
+          - env.common
