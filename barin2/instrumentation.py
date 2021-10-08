@@ -25,16 +25,29 @@ def init_module():
 
 
 def get_state(obj):
-    return getattr(obj, STATE_MAGIC)
+    return getattr(obj, STATE_MAGIC, None)
 
 
 class InstrumentedState:
     def __init__(self):
         self.container = None
+        self.collection = None
         self._status = Status.CLEAN
+        self._pristine = None
 
     def __repr__(self):
-        return f"<istate status={self._status} container={self.container}>"
+        parts = [f"<istate status={self._status}"]
+        if self.collection:
+            c = self.collection
+            parts.append(f" collection={c.database.name}.{c.name}")
+        if self.container:
+            parts.append(f" container={self.container}")
+        parts.append(">")
+        return "".join(parts)
+
+    @property
+    def pristine(self):
+        return self._pristine
 
     @property
     def status(self):
@@ -50,9 +63,15 @@ class InstrumentedState:
             Status.DIRTY,
         ):
             get_state(self.container).status = value
+        if self._pristine and value == Status.CLEAN:
+            self._pristine = None
 
-    def on_modify(self):
+    def before_modify(self, object):
+        """Called before object (which owns this state) is changed"""
+        print("Before modify")
         if self._status == Status.CLEAN:
+            print("Copy object to _pristine")
+            self._pristine = object.copy()
             self.status = Status.DIRTY
 
 
@@ -84,10 +103,17 @@ def instrument_method(cls, method_name):
     super_method = getattr(cls, method_name)
 
     def f(self, *args, **kwargs):
-        get_state(self).on_modify()
+        get_state(self).before_modify(self)
         return super_method(self, *args, **kwargs)
 
     return f
+
+
+def instrument_document(obj, status, collection):
+    mobj = instrument_object(obj, status)
+    state = get_state(mobj)
+    state.collection = collection
+    return mobj
 
 
 @singledispatch
